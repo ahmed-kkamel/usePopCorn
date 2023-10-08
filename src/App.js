@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const tempMovieData = [
 	{
@@ -50,30 +50,95 @@ const tempWatchedData = [
 const average = (arr) =>
 	arr.reduce((acc, cur, i, arr) => acc + cur / arr.length, 0);
 
+const KEY = "8b862c81";
 export default function App() {
-	const [movies, setMovies] = useState(tempMovieData);
-	const [watched, setWatched] = useState(tempWatchedData);
+	const [query, setQuery] = useState("inception");
+	const [movies, setMovies] = useState([]);
+	const [watched, setWatched] = useState([]);
+	const [isLoading, setIsLoading] = useState(false);
+	const [error, setError] = useState("");
+	const [selectedId, setSelectedId] = useState(null);
+
+	function handleSelectedMovie(id) {
+		setSelectedId((selectedId) => (id === selectedId ? null : id));
+	}
+	function handleCloseMovie() {
+		setSelectedId(null);
+	}
+	useEffect(
+		function () {
+			setIsLoading(true);
+			setError("");
+			async function fetchMovies() {
+				try {
+					const res = await fetch(
+						`http://www.omdbapi.com/?apikey=${KEY}&s=${query}`
+					);
+					if (!res.ok) throw new Error("There's an error with fetching data");
+					const data = await res.json();
+					if (data.Response === "False") throw new Error("Movie not found!");
+					setMovies(data.Search);
+					setIsLoading(false);
+					console.log(data);
+				} catch (err) {
+					// console.error(err.message);
+					setError(err.message);
+					setIsLoading(false);
+				}
+			}
+			if (query.length < 3) {
+				setMovies([]);
+				setError("");
+				setIsLoading(false);
+				return;
+			}
+			fetchMovies();
+		},
+		[query]
+	);
 
 	return (
 		<>
 			<NavBar>
-				<Search />
+				<Search query={query} setQuery={setQuery} />
 				<NumResults movies={movies} />
 			</NavBar>
 
 			<Main>
 				<Box>
-					<MoviesList movies={movies} />{" "}
+					{/* {isLoading ? <Loader /> : <MoviesList movies={movies} />} */}
+					{isLoading && <Loader />}
+					{!isLoading && !error && (
+						<MoviesList movies={movies} onSelectId={handleSelectedMovie} />
+					)}
+					{error && <ErrorMessage message={error} />}
 				</Box>
 				<Box>
-					<WatchedMoviesSummary watched={watched} />
-					<WatchedMoviesList watched={watched} />
+					{selectedId ? (
+						<MovieDetails onClose={handleCloseMovie} selectedId={selectedId} />
+					) : (
+						<>
+							<WatchedMoviesSummary watched={watched} />
+							<WatchedMoviesList watched={watched} />
+						</>
+					)}
 				</Box>
 			</Main>
 		</>
 	);
 }
 
+function Loader() {
+	return <p className="loader">Loading...</p>;
+}
+function ErrorMessage({ message }) {
+	return (
+		<p className="error">
+			<span>⛔</span>
+			{message}
+		</p>
+	);
+}
 function NavBar({ children }) {
 	return (
 		<nav className="nav-bar">
@@ -90,8 +155,7 @@ function Logo() {
 		</div>
 	);
 }
-function Search() {
-	const [query, setQuery] = useState("");
+function Search({ query, setQuery }) {
 	return (
 		<input
 			className="search"
@@ -145,18 +209,18 @@ function Box({ children }) {
 	);
 }
 */
-function MoviesList({ movies }) {
+function MoviesList({ movies, onSelectId }) {
 	return (
-		<ul className="list">
+		<ul className="list list-movies">
 			{movies?.map((movie) => (
-				<Movie movie={movie} key={movie.imdbID} />
+				<Movie movie={movie} onSelectId={onSelectId} key={movie.imdbID} />
 			))}
 		</ul>
 	);
 }
-function Movie({ movie }) {
+function Movie({ movie, onSelectId }) {
 	return (
-		<li>
+		<li onClick={() => onSelectId(movie.imdbID)}>
 			<img src={movie.Poster} alt={`${movie.Title} poster`} />
 			<h3>{movie.Title}</h3>
 			<div>
@@ -168,7 +232,16 @@ function Movie({ movie }) {
 		</li>
 	);
 }
-
+function MovieDetails({ selectedId, onClose }) {
+	return (
+		<div className="details">
+			<button className="btn-back" onClick={onClose}>
+				&larr;
+			</button>
+			{selectedId}
+		</div>
+	);
+}
 function WatchedMoviesSummary({ watched }) {
 	const avgImdbRating = average(watched.map((movie) => movie.imdbRating));
 	const avgUserRating = average(watched.map((movie) => movie.userRating));
